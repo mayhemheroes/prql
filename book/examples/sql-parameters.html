@@ -140,9 +140,24 @@
 
                 <div id="content" class="content">
                     <main>
-                        <pre><code class="language-prql">from mytable
+                        <div class="comparison">
+<div>
+<h4 id="prql"><a class="header" href="#prql">PRQL</a></h4>
+<pre><code class="language-prql">from mytable
 filter id == $1
 </code></pre>
+</div>
+<div>
+<h4 id="sql"><a class="header" href="#sql">SQL</a></h4>
+<pre><code class="language-sql">SELECT
+  mytable.*
+FROM
+  mytable
+WHERE
+  id = $1
+</code></pre>
+</div>
+</div>
 
                     </main>
 
