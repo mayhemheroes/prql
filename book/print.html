@@ -376,6 +376,17 @@ group [title, country] (
 # Comment 2
 aggregate [average salary]
 </code></pre>
+<h2 id="backticks"><a class="header" href="#backticks">Backticks</a></h2>
+<p>To use identifiers that are otherwise invalid, surround them with backticks.
+Depending on the dialect, these will remain as backticks or be converted to double-quotes</p>
+<pre><code class="language-prql">prql dialect:bigquery
+from `project-foo.dataset.table`
+join `project-bar.dataset.table` [col_bax]
+</code></pre>
+<pre><code class="language-prql">prql dialect:postgres
+from employees
+select `first name`
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="query-header-dialect--version"><a class="header" href="#query-header-dialect--version">Query header: Dialect &amp; Version</a></h1>
 <h2 id="dialect"><a class="header" href="#dialect">Dialect</a></h2>
 <p>PRQL allows specifying a dialect at the top of the query, which allows PRQL to
@@ -896,13 +907,6 @@ the quotes. <code>s&quot;average{col}&quot;</code> produces <code>average(salary
 <p>s-strings in user code are intended as an escape-hatch for an unimplemented
 feature. If we often need s-strings to express something, that's a sign we
 should implement it in PRQL or PRQL's stdlib.</p>
-<h2 id="backticks"><a class="header" href="#backticks">Backticks</a></h2>
-<p>PRQL will also pass through identifiers surrounded by backticks (including the
-backticks). Some databases — e.g. BigQuery — use this to allow identifiers which
-aren't otherwise valid; such as those containing a hyphen.</p>
-<pre><code class="language-prql">from `project-foo.dataset.table`
-join `project-bar.dataset.table` [col_bax]
-</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="strings"><a class="header" href="#strings">Strings</a></h1>
 <p>Strings in PRQL can use either single or double quotes:</p>
 <pre><code class="language-prql">derive x = &quot;hello world&quot;

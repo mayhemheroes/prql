@@ -221,6 +221,17 @@ group [title, country] (
 # Comment 2
 aggregate [average salary]
 </code></pre>
+<h2 id="backticks"><a class="header" href="#backticks">Backticks</a></h2>
+<p>To use identifiers that are otherwise invalid, surround them with backticks.
+Depending on the dialect, these will remain as backticks or be converted to double-quotes</p>
+<pre><code class="language-prql">prql dialect:bigquery
+from `project-foo.dataset.table`
+join `project-bar.dataset.table` [col_bax]
+</code></pre>
+<pre><code class="language-prql">prql dialect:postgres
+from employees
+select `first name`
+</code></pre>
 
                     </main>
 
