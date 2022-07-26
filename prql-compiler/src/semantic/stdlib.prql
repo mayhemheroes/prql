@@ -2,16 +2,16 @@
 
 # make sure to update cast_transfrom if you change any of the declarations here
 
-func from<table> source -> 0
-func select<table> assigns tbl -> 0
-func filter<table> condition tbl -> 0
-func derive<table> assigns tbl -> 0
-func aggregate<table> assigns tbl -> 0
-func sort<table> by tbl -> 0
-func take<table> expr tbl -> 0
-func join<table> with filter side:inner tbl -> 0
-func group<table> by pipeline tbl -> 0
-func window<table> rows:0..0 range:0..0 expanding:false rolling:0 pipeline tbl -> 0
+func from<table> source<table> -> ()
+func select<table> a<assigns<column>> tbl -> ()
+func filter<table> condition<bool> tbl -> ()
+func derive<table> a<assigns<column>> tbl -> ()
+func aggregate<table> a<assigns<column>> tbl -> ()
+func sort<table> by tbl -> ()
+func take<table> expr tbl -> ()
+func join<table> with<table> filter side<builtin_keyword>:inner tbl -> ()
+func group<table> by pipeline tbl -> ()
+func window<table> rows:0..0 range:0..0 expanding:false rolling:0 pipeline tbl -> ()
 
 # Aggregate Functions
 
