@@ -155,9 +155,57 @@ those need to be built deeper into the compiler. We’ll resolve this at some po
 then, we’ll only add functions here that are broadly supported by most DBs.</p>
 </div>
 </div>
-<p>Here’s the source of the current <a href="https://github.com/prql/prql/blob/main/prql-compiler/src/sql/stdlib.prql">PRQL
+<p>Here’s the source of the current <a href="https://github.com/prql/prql/blob/main/prql-compiler/src/semantic/stdlib.prql">PRQL
 stdlib</a>:</p>
-<pre><code class="language-prql_no_test">{{#include ../../prql-compiler/src/sql/stdlib.prql}}
+<pre><code class="language-prql_no_test"># Transform type definitions
+
+# make sure to update cast_transfrom if you change any of the declarations here
+
+func from&lt;table&gt; source -&gt; 0
+func select&lt;table&gt; assigns tbl -&gt; 0
+func filter&lt;table&gt; condition tbl -&gt; 0
+func derive&lt;table&gt; assigns tbl -&gt; 0
+func aggregate&lt;table&gt; assigns tbl -&gt; 0
+func sort&lt;table&gt; by tbl -&gt; 0
+func take&lt;table&gt; expr tbl -&gt; 0
+func join&lt;table&gt; with filter side:inner tbl -&gt; 0
+func group&lt;table&gt; by pipeline tbl -&gt; 0
+func window&lt;table&gt; rows:0..0 range:0..0 expanding:false rolling:0 pipeline tbl -&gt; 0
+
+# Aggregate Functions
+
+func min &lt;scalar|column&gt; column -&gt;  s&quot;MIN({column})&quot;
+func max &lt;scalar|column&gt; column -&gt;  s&quot;MAX({column})&quot;
+func sum &lt;scalar|column&gt; column -&gt;  s&quot;SUM({column})&quot;
+func avg &lt;scalar|column&gt; column -&gt;  s&quot;AVG({column})&quot;
+func stddev &lt;scalar|column&gt; column -&gt;  s&quot;STDDEV({column})&quot;
+func average &lt;scalar|column&gt; column -&gt;  s&quot;AVG({column})&quot;
+func count &lt;scalar|column&gt; non_null:s&quot;*&quot; -&gt;  s&quot;COUNT({non_null})&quot;
+func round &lt;scalar|column&gt; column n_digits -&gt;  s&quot;ROUND({column}, {n_digits})&quot;
+# TODO: Possibly make this into `count distinct:true` (or like `distinct:` as an
+# abbreviation of that?)
+func count_distinct &lt;scalar|column&gt; column -&gt;  s&quot;COUNT(DISTINCT `{column}`)&quot;
+
+# TODO: Introduce a notation for getting start and end out of a ranges
+# could be range.0? or range.start? But to make this happen, we need to make
+# changes to how variables are resolved.
+func in&lt;bool&gt; range value -&gt;  s&quot;{value} BETWEEN {range}&quot;
+
+# Casting functions
+
+func as&lt;scalar&gt; column type -&gt;  s&quot;CAST({column} AS {type})&quot;
+
+# Window functions
+func lag&lt;column&gt; offset column -&gt;  s&quot;LAG({column}, {offset})&quot;
+func lead&lt;column&gt; offset column -&gt;  s&quot;LEAD({column}, {offset})&quot;
+func first&lt;column&gt; offset column -&gt;  s&quot;FIRST_VALUE({column}, {offset})&quot;
+func last&lt;column&gt; offset column -&gt;  s&quot;LAST_VALUE({column}, {offset})&quot;
+func rank&lt;column&gt; -&gt;  s&quot;RANK()&quot;
+func rank_dense&lt;column&gt; -&gt;  s&quot;DENSE_RANK()&quot;
+func row_number&lt;column&gt; -&gt;  s&quot;ROW_NUMBER()&quot;
+
+# Logical functions
+func coalesce value default -&gt; s&quot;COALESCE({value}, {default})&quot;
 </code></pre>
 
                     </main>
