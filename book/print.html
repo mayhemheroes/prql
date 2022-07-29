@@ -1631,7 +1631,7 @@ derive first_check_in = start + 10days
 <h4 id="sql-54"><a class="header" href="#sql-54">SQL</a></h4>
 <pre><code class="language-sql">SELECT
   projects.*,
-  start + INTERVAL '10' DAY AS first_check_in
+  start + INTERVAL 10 DAY AS first_check_in
 FROM
   projects
 </code></pre>
