@@ -189,6 +189,21 @@ mod test {
     }
 
     #[test]
+    fn test_union() -> Result<()> {
+        assert_display_snapshot!(compile(r###"
+        from employees
+        union all managers
+        "###)?, @r###"
+        SELECT
+          employees.*
+        FROM
+          employees
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
     fn test_rn_ids_are_unique() {
         assert_display_snapshot!((compile(r###"
         from y_orig
@@ -202,25 +217,25 @@ mod test {
         WITH table_0 AS (
           SELECT
             y_orig.*,
-            ROW_NUMBER() OVER (PARTITION BY y_id) AS _rn_82
+            ROW_NUMBER() OVER (PARTITION BY y_id) AS _rn_86
           FROM
             y_orig
         ),
         table_1 AS (
           SELECT
             table_0.*,
-            ROW_NUMBER() OVER (PARTITION BY x_id) AS _rn_83
+            ROW_NUMBER() OVER (PARTITION BY x_id) AS _rn_87
           FROM
             table_0
           WHERE
-            _rn_82 <= 2
+            _rn_86 <= 2
         )
         SELECT
           table_1.*
         FROM
           table_1
         WHERE
-          _rn_83 <= 3
+          _rn_87 <= 3
         "###);
     }
 
@@ -869,7 +884,7 @@ select `first name`
         WITH table_0 AS (
           SELECT
             employees.*,
-            ROW_NUMBER() OVER (PARTITION BY department) AS _rn_81
+            ROW_NUMBER() OVER (PARTITION BY department) AS _rn_85
           FROM
             employees
         )
@@ -878,7 +893,7 @@ select `first name`
         FROM
           table_0
         WHERE
-          _rn_81 <= 3
+          _rn_85 <= 3
         "###);
 
         assert_display_snapshot!((compile(r###"
@@ -892,7 +907,7 @@ select `first name`
               PARTITION BY department
               ORDER BY
                 salary
-            ) AS _rn_82
+            ) AS _rn_86
           FROM
             employees
         )
@@ -901,7 +916,7 @@ select `first name`
         FROM
           table_0
         WHERE
-          _rn_82 BETWEEN 2
+          _rn_86 BETWEEN 2
           AND 3
         "###);
     }

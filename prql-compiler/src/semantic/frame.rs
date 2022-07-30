@@ -47,7 +47,7 @@ impl Frame {
             Transform::From(t) => {
                 *self = Frame::default();
 
-                let table_id = t
+                let table_id = dbg!(t)
                     .declared_at
                     .ok_or_else(|| anyhow!("unresolved table {t:?}"))?;
                 self.tables.push(table_id);
@@ -118,6 +118,15 @@ impl Frame {
                 self.sort = extract_sorts(sort)?;
             }
             Transform::Filter(_) | Transform::Take { .. } | Transform::Unique => {}
+            Transform::Union { with, kind: _ } => {
+                // FIXME: Currently this always raises the error. How can we
+                // register the table?
+                let table_id = dbg!(with)
+                    .declared_at
+                    .ok_or_else(|| anyhow!("unresolved table {with:?}"))?;
+                self.tables.push(table_id);
+                self.columns.push(FrameColumn::All(table_id));
+            }
         }
         Ok(())
     }

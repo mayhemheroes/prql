@@ -8,6 +8,7 @@ func filter<table> condition tbl -> 0
 func derive<table> assigns tbl -> 0
 func aggregate<table> assigns tbl -> 0
 func sort<table> by tbl -> 0
+func union<table> kind with tbl -> 0
 func take<table> expr tbl -> 0
 func join<table> with filter side:inner tbl -> 0
 func group<table> by pipeline tbl -> 0

@@ -13,7 +13,7 @@ pub fn cast_transform(func_call: FuncCall, span: Option<Span>) -> Result<Transfo
 
             let table_ref = TableRef {
                 name: expr.unwrap(Item::into_ident, "ident").with_help(
-                    "`from` does not support inline expressions. You can only pass a table name.",
+                    "`from` does not currently support inline expressions; only table names.",
                 )?,
                 alias: name,
                 declared_at: None,
@@ -125,7 +125,7 @@ pub fn cast_transform(func_call: FuncCall, span: Option<Span>) -> Result<Transfo
             let (with_alias, with) = with.into_name_and_expr();
             let with = TableRef {
                 name: with.unwrap(Item::into_ident, "ident").with_help(
-                    "`join` does not support inline expressions. You can only pass a table name.",
+                    "`join` does not currently support inline expressions; only table names.",
                 )?,
                 alias: with_alias,
                 declared_at: None,
@@ -242,13 +242,48 @@ pub fn cast_transform(func_call: FuncCall, span: Option<Span>) -> Result<Transfo
                 pipeline: Box::new(Item::Pipeline(pipeline.coerce_to_pipeline()).into()),
             }
         }
+        "union" => {
+            let ([kind, with], []) = unpack(func_call, [])?;
+            let (name, expr) = with.into_name_and_expr();
+
+            let table_ref = TableRef {
+                name: expr.unwrap(Item::into_ident, "ident").with_help(
+                    "`union` does not currently support inline expressions; only table names.",
+                )?,
+                alias: name,
+                declared_at: None,
+            };
+
+            let kind = {
+                let span = kind.span;
+                let ident = kind.unwrap(Item::into_ident, "ident")?;
+                match ident.as_str() {
+                    "all" => UnionKind::All,
+                    "distinct" => UnionKind::Distinct,
+                    "intersect" => UnionKind::Intersect,
+
+                    found => bail!(Error::new(Reason::Expected {
+                        who: Some("kind".to_string()),
+                        expected: "inner, left, right or full".to_string(),
+                        found: found.to_string()
+                    })
+                    .with_span(span)),
+                }
+            };
+            Transform::Union {
+                with: table_ref,
+                kind,
+            }
+        }
         unknown => bail!(Error::new(Reason::Expected {
             who: None,
             expected: "a known transform".to_string(),
             found: format!("`{unknown}`")
         })
         .with_span(span)
-        .with_help("use one of: from, select, derive, filter, aggregate, group, join, sort, take")),
+        .with_help(
+            "use one of: from, select, derive, filter, aggregate, group, join, sort, take, union"
+        )),
     })
 }
 
@@ -313,7 +348,7 @@ mod tests {
                   From:
                     name: c_invoice
                     alias: ~
-                    declared_at: 79
+                    declared_at: 83
               - Transform:
                   Select:
                     - Ident: invoice_no
@@ -377,7 +412,7 @@ mod tests {
                   From:
                     name: c_invoice
                     alias: ~
-                    declared_at: 79
+                    declared_at: 83
               - Transform:
                   Group:
                     by:
@@ -419,7 +454,7 @@ mod tests {
                   From:
                     name: invoices
                     alias: ~
-                    declared_at: 79
+                    declared_at: 83
               - Transform:
                   Sort:
                     - direction: Asc

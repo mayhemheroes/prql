@@ -59,9 +59,19 @@ pub enum Transform {
         range: Range,
         pipeline: Box<Node>,
     },
+    Union {
+        with: TableRef,
+        kind: UnionKind,
+    },
     Unique, // internal only, can be expressed with group & take
 }
 
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub enum UnionKind {
+    All,
+    Distinct,
+    Intersect,
+}
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum WindowKind {
     Rows,

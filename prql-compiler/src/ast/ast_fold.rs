@@ -216,6 +216,10 @@ pub fn fold_transform<T: ?Sized + AstFold>(
             sort: fold.fold_column_sorts(sort)?,
         },
         Transform::Unique => Transform::Unique,
+        Transform::Union { with, kind } => Transform::Union {
+            with: fold.fold_table_ref(with)?,
+            kind,
+        },
     })
 }
 

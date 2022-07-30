@@ -367,7 +367,7 @@ mod test {
         @@ -3,6 +3,3 @@
              name: employees
              alias: null
-             declared_at: 79
+             declared_at: 83
         -- Transform: !Derive
         -  - Ident: gross_salary
         -  - Ident: gross_cost
@@ -462,7 +462,7 @@ take 20
         assert!(!diff.is_empty());
         assert_display_snapshot!(diff, @r###"
         @@ -4,5 +4,9 @@
-             declared_at: 79
+             declared_at: 83
          - Transform: !Aggregate
              assigns:
         -    - Ident: <unnamed>
@@ -517,7 +517,7 @@ take 20
             From:
               name: a
               alias: ~
-              declared_at: 84
+              declared_at: 88
         "###);
 
         Ok(())
@@ -540,7 +540,7 @@ take 20
 
         assert_snapshot!(diff(&to_string(&pipeline.nodes)?, &to_string(&mat.nodes)?), @r###"
         @@ -4,6 +4,14 @@
-             declared_at: 79
+             declared_at: 83
          - Transform: !Aggregate
              assigns:
         -    - Ident: one
@@ -576,7 +576,7 @@ take 20
             From:
               name: a
               alias: ~
-              declared_at: 81
+              declared_at: 85
         - Transform:
             Aggregate:
               assigns:
@@ -618,7 +618,7 @@ take 20
             From:
               name: foo_table
               alias: ~
-              declared_at: 82
+              declared_at: 86
         "###);
 
         Ok(())
@@ -643,7 +643,7 @@ take 20
             From:
               name: employees
               alias: ~
-              declared_at: 79
+              declared_at: 83
         - Transform:
             Aggregate:
               assigns:
@@ -746,7 +746,7 @@ take 20
             From:
               name: employees
               alias: ~
-              declared_at: 79
+              declared_at: 83
         - Transform:
             Group:
               by:
@@ -820,7 +820,7 @@ take 20
             From:
               name: orders
               alias: ~
-              declared_at: 79
+              declared_at: 83
         - Transform:
             Take:
               range:
@@ -852,14 +852,14 @@ take 20
             From:
               name: table_1
               alias: ~
-              declared_at: 84
+              declared_at: 88
         - Transform:
             Join:
               side: Inner
               with:
                 name: customers
                 alias: ~
-                declared_at: 85
+                declared_at: 89
               filter:
                 Using:
                   - Ident: customer_no
