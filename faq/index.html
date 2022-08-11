@@ -18,11 +18,8 @@ data, in R. It&rsquo;s very similar to PRQL. It only works on in-memory R data.<
 <a href=https://dbplyr.tidyverse.org/ target=_blank rel=noopener>dbplyr<sup><i class="bx bx-link-external"></i></sup></a>
 which compiles a subset
 of dplyr to SQL, though requires an R runtime.</li></ul></li><li><a href="https://docs.microsoft.com/azure/data-explorer/kusto/query/samples?pivots=azuredataexplorer" target=_blank rel=noopener>Kusto<sup><i class="bx bx-link-external"></i></sup></a>
-is also a beautiful pipelined language, very similar to PRQL. But it can only
-use Kusto-compatible DBs.<ul><li>A Kusto-to-SQL transpiler would be a legitimate alternative to PRQL, though
-there would be some impedance mismatch in some areas. My central criticism
-of Kusto is that it gives up broad compatibility without getting that much
-in return.</li></ul></li><li><a href=https://www.scattered-thoughts.net/writing/against-sql/ target=_blank rel=noopener>Against SQL<sup><i class="bx bx-link-external"></i></sup></a>
+is also a beautiful pipelined language, similar to PRQL. But it can only
+use Kusto-compatible DBs.</li><li><a href=https://www.scattered-thoughts.net/writing/against-sql/ target=_blank rel=noopener>Against SQL<sup><i class="bx bx-link-external"></i></sup></a>
 gives a
 fairly complete description of SQL&rsquo;s weaknesses, both for analytical and
 transactional queries.
@@ -32,9 +29,9 @@ writes insightful pieces, and it&rsquo;s worth sponsoring him for his updates.</
 <a href=https://gitlab.com/aplavin/DataPipes.jl target=_blank rel=noopener>DataPipes.jl<sup><i class="bx bx-link-external"></i></sup></a>
 &
 <a href=https://github.com/jkrumbiegel/Chain.jl target=_blank rel=noopener>Chain.jl<sup><i class="bx bx-link-external"></i></sup></a>
-, which demonstrate how
-effective point-free pipelines can be, and how line-breaks can work as pipes.</li><li><a href=https://ocaml.org/ target=_blank rel=noopener>OCaml<sup><i class="bx bx-link-external"></i></sup></a>
-, for its elegant and simple syntax.</li></ul><p>And there are many projects similar to PRQL:</p><ul><li><a href=https://hexdocs.pm/ecto/Ecto.html#module-query target=_blank rel=noopener>Ecto<sup><i class="bx bx-link-external"></i></sup></a>
+demonstrate how effective
+point-free pipelines can be, and how line-breaks can work as pipes.</li><li><a href=https://ocaml.org/ target=_blank rel=noopener>OCaml<sup><i class="bx bx-link-external"></i></sup></a>
+&rsquo;s elegant and simple syntax serves as inspiration.</li></ul><p>And there are many projects similar to PRQL:</p><ul><li><a href=https://hexdocs.pm/ecto/Ecto.html#module-query target=_blank rel=noopener>Ecto<sup><i class="bx bx-link-external"></i></sup></a>
 is a sophisticated
 ORM library in Elixir which has pipelined queries as well as more traditional
 ORM features.</li><li><a href=http://blog.hydromatic.net/2020/02/25/morel-a-functional-language-for-data.html target=_blank rel=noopener>Morel<sup><i class="bx bx-link-external"></i></sup></a>
@@ -43,18 +40,21 @@ compile to SQL but states that it can access external data.</li><li><a href=http
 from Looker &
 <a href=https://github.com/lloydtabb target=_blank rel=noopener><strong>@lloydtabb</strong><sup><i class="bx bx-link-external"></i></sup></a>
 in a new language which
-combines a declarative syntax for querying with a modelling layer.</li><li><a href=https://github.com/MechanicalRabbit/FunSQL.jl target=_blank rel=noopener>FunSQL.jl<sup><i class="bx bx-link-external"></i></sup></a>
+combines a declarative syntax for querying with a modelling layer.</li><li><a href=https://www.edgedb.com/ target=_blank rel=noopener>EdgeDB<sup><i class="bx bx-link-external"></i></sup></a>
+is an alternative to SQL focused on
+traditional transactional workloads (as opposed to PRQL&rsquo;s focus on analytical
+workloads). Their post
+<a href=https://www.edgedb.com/blog/we-can-do-better-than-sql target=_blank rel=noopener>We can do better than
+SQL<sup><i class="bx bx-link-external"></i></sup></a>
+contains many of
+the criticisms of SQL that inspired PRQL.</li><li><a href=https://github.com/MechanicalRabbit/FunSQL.jl target=_blank rel=noopener>FunSQL.jl<sup><i class="bx bx-link-external"></i></sup></a>
 is a library in
 Julia which compiles a nice query syntax to SQL. It requires a Julia runtime.</li><li><a href=https://docs.microsoft.com/dotnet/csharp/linq/write-linq-queries target=_blank rel=noopener>LINQ<sup><i class="bx bx-link-external"></i></sup></a>
 ,
 is a pipelined language for the <code>.NET</code> ecosystem which can (mostly) compile to
 SQL. It was one of the first languages to take this approach.</li><li><a href=https://github.com/RCHowell/Sift target=_blank rel=noopener>Sift<sup><i class="bx bx-link-external"></i></sup></a>
 is an experimental language which
-heavily uses pipes and relational algebra.</li><li>After writing the original proposal (including the name!), we found
-<a href=https://github.com/erezsh/Preql target=_blank rel=noopener>Preql<sup><i class="bx bx-link-external"></i></sup></a>
-. Despite the similar name and
-compiling to SQL, it seems to focus more on making the language python-like,
-which is very different to this proposal.</li></ul><blockquote><p>If any of these descriptions can be improved, please feel free to PR changes.</p></blockquote><h2 id=how-is-prql-different-from-all-the-projects-that-sql-has-defeated>How is PRQL different from all the projects that SQL has defeated?</h2><p>Many languages have attempted to replace SQL, and yet SQL has massively <em>grown</em>
+heavily uses pipes and relational algebra.</li></ul><blockquote><p>If any of these descriptions can be improved, please feel free to PR changes.</p></blockquote><h2 id=how-is-prql-different-from-all-the-projects-that-sql-has-defeated>How is PRQL different from all the projects that SQL has defeated?</h2><p>Many languages have attempted to replace SQL, and yet SQL has massively <em>grown</em>
 in usage and importance in the past decade. There are lots
 <a href=https://twitter.com/seldo/status/1513599841355526145 target=_blank rel=noopener>of<sup><i class="bx bx-link-external"></i></sup></a>
 <a href="https://benn.substack.com/p/has-sql-gone-too-far?s=r#footnote-anchor-2" target=_blank rel=noopener>reasonable<sup><i class="bx bx-link-external"></i></sup></a>
