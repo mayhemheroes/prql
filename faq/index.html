@@ -64,12 +64,12 @@ many others have failed at?&rdquo;. Some thoughts:</p><ul><li>PRQL is open. It&r
 fully open-source. There will never be a commercial product. We&rsquo;ll never have
 to balance profitability against compatibility, or try and expand up the stack
 to justify a valuation. Whether someone is building a new tool or writing a
-simple query — PRQL can be <em>more</em> compatible across DBs than SQL.</li><li>PRQL is analytical. The biggest growth in SQL usage has been from querying large
-amounts of data, often from analytical DBs that are specifically designed for
-this — with columnar storage and wide denormalized tables. SQL carries a lot
-of baggage unrelated to this, and focusing on the analytical use-case lets us
-make a better language.</li><li>PRQL is simple. There&rsquo;s often a tradeoff between power and accessibility
-— rust is powerful vs. Excel is accessible — but there are also instances
+simple query — PRQL can be <em>more</em> compatible across DBs than SQL.</li><li>PRQL is analytical. The biggest growth in SQL usage over the past decade has
+been from querying large amounts of data, often from analytical DBs that are
+specifically designed for this — with columnar storage and wide denormalized
+tables. SQL carries a lot of unrelated baggage, and focusing on the analytical
+use-case lets us make a better language.</li><li>PRQL is simple. There&rsquo;s often a tradeoff between power and accessibility
+— e.g. rust is powerful vs. Excel is accessible — but there are also instances
 where we can expand the frontier. PRQL&rsquo;s orthogonality is an example of
 synthesizing this tradeoff — have a single <code>filter</code> rather than <code>WHERE</code> & <code>HAVING</code>
 & <code>QUALIFY</code> brings both more power <em>and</em> more accessibility.</li></ul><p>In the same way that &ldquo;SQL was invented in the 1970s and therefore must be bad&rdquo;
@@ -98,16 +98,16 @@ PRQL&rsquo;s orthogonality.</p><pre tabindex=0><code class=language-prql data-la
 group department (
   aggregate [total_salary = sum salary]
 )
-</code></pre><p>While you should be skeptical of new claims from new entrants, but
+</code></pre><p>While you should be skeptical of new claims from new entrants
 <a href=https://twitter.com/hadleywickham target=_blank rel=noopener>Hadley
 Wickham<sup><i class="bx bx-link-external"></i></sup></a>
 , the developer of
 <a href=https://www.tidyverse.org/ target=_blank rel=noopener>Tidyverse<sup><i class="bx bx-link-external"></i></sup></a>
 <a href="https://news.ycombinator.com/item?id=30067406" target=_blank rel=noopener>commented<sup><i class="bx bx-link-external"></i></sup></a>
 in a discussion on
-PRQL:</p><blockquote><p>FWIW the separate <code>group_by()</code> is one of my greatest design regrets with dplyr
+PRQL:</p><blockquote><p>&ldquo;FWIW the separate <code>group_by()</code> is one of my greatest design regrets with dplyr
 — I wish I had made <code>by</code> a parameter of <code>summarise()</code>, <code>mutate()</code>, <code>filter()</code>
-etc.</p></blockquote><p>For more detail, check out the docs in the
+etc.&rdquo;</p></blockquote><p>For more detail, check out the docs in the
 <a href=https://prql-lang.org/book target=_blank rel=noopener>PRQL Book<sup><i class="bx bx-link-external"></i></sup></a>
 .</p></article></main><footer id=footer><div class=container><div class=row><div class="col-md-6 py-3"><h3>Help the project</h3><ul><li>Send a link to PRQL to a couple of people whose opinion you respect.</li><li>Rewrite any of your own queries to PRQL to see if it makes sense.
 You can use the
