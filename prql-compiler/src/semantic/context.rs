@@ -1,7 +1,7 @@
 use anyhow::Result;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 
 use super::{split_var_name, Declaration, Declarations, Scope};
@@ -116,12 +116,12 @@ impl Context {
     }
 
     /// Move top-level expressions into declarations and replace them with idents
-    pub(super) fn extract_decls(&mut self, nodes: Vec<Expr>) -> Result<Vec<Expr>> {
+    pub(super) fn declare_as_idents(&mut self, nodes: Vec<Expr>) -> Result<Vec<Expr>> {
         let mut res = Vec::with_capacity(nodes.len());
         for node in nodes {
             let alias = node.alias.clone();
 
-            let expr = self.extract_decl(node)?;
+            let expr = self.declare_as_ident(node)?;
 
             res.push(if let Some(alias) = alias {
                 // introduce a new expression alias
@@ -135,7 +135,7 @@ impl Context {
         Ok(res)
     }
 
-    fn extract_decl(&mut self, expr: Expr) -> Result<Expr> {
+    fn declare_as_ident(&mut self, expr: Expr) -> Result<Expr> {
         Ok(match expr.kind {
             // keep existing ident
             ExprKind::Ident(_) => expr,
@@ -143,11 +143,16 @@ impl Context {
             // declare new expression so it can be references from FrameColumn
             _ => {
                 let span = expr.span;
-                let id = self.declare(Declaration::Expression(Box::from(expr)), span);
+                let id = self.declare(Declaration::Expression(Box::from(expr.clone())), span);
 
-                let mut placeholder = Expr::from(ExprKind::Ident("<unnamed>".to_string()));
-                placeholder.declared_at = Some(id);
-                placeholder
+                Expr {
+                    kind: ExprKind::Literal(Literal::Null),
+                    span,
+                    declared_at: Some(id),
+                    ty: None,
+                    is_complex: false,
+                    alias: None,
+                }
             }
         })
     }
@@ -166,6 +171,25 @@ impl Context {
                 FrameColumn::Named(name, _) => Some(name.clone()),
             })
             .collect()
+    }
+
+    pub fn take_decls(&mut self, namespace: &str) -> HashMap<String, Declaration> {
+        let dropped = self.scope.pop_namespace(namespace);
+        let mut res = HashMap::new();
+        for (name, id) in dropped.unwrap_or_default() {
+            let decl = self.declarations.take(id);
+            self.declarations.forget(id);
+            res.insert(name, decl);
+        }
+        res
+    }
+
+    pub fn insert_decls(&mut self, namespace: &str, decls: HashMap<String, Declaration>) {
+        for (name, dec) in decls {
+            let id = self.declarations.push(dec, None);
+
+            self.scope.add(namespace, name, id);
+        }
     }
 }
 

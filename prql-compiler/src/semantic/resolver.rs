@@ -7,9 +7,10 @@ use itertools::Itertools;
 use crate::ast::ast_fold::*;
 use crate::ast::*;
 use crate::error::{Error, Reason, Span};
+use crate::semantic::scope::NS_PARAM;
 
 use super::scope::NS_FRAME;
-use super::type_resolver::{resolve_type, type_of_func_def, validate_type};
+use super::type_resolver::{resolve_type, type_of_closure, validate_type};
 use super::{Context, Declaration, Frame};
 
 /// Runs semantic analysis on the query, using current state.
@@ -47,21 +48,19 @@ enum Namespace {
 
 impl AstFold for Resolver {
     fn fold_expr(&mut self, mut node: Expr) -> Result<Expr> {
+        let alias = node.alias.clone();
         let mut r = match node.kind {
             ExprKind::Ident(ref ident) => {
                 let id = self.lookup_name(ident, node.span, &node.alias)?;
                 node.declared_at = Some(id);
 
                 let decl = self.context.declarations.get(id);
+
                 match decl {
                     // convert ident to function without args
-                    Declaration::Function(_) => {
-                        let curry = FuncCurry {
-                            def_id: id,
-                            args: vec![],
-                            named_args: vec![],
-                        };
-                        self.fold_function(curry, vec![], HashMap::new(), node.span)?
+                    Declaration::Function(func_def) => {
+                        let closure = closure_of_func_def(func_def);
+                        self.fold_function(closure, vec![], HashMap::new(), node.span)?
                     }
 
                     // init type for tables
@@ -70,7 +69,6 @@ impl AstFold for Resolver {
                         ..node
                     },
 
-                    // init type for tables
                     Declaration::Expression(expr) => *expr.clone(),
 
                     _ => node,
@@ -82,77 +80,30 @@ impl AstFold for Resolver {
                 args,
                 named_args,
             }) => {
-                // find function
-                let curry = match name.kind {
-                    // by function name
-                    ExprKind::Ident(name) => {
-                        let id = self.lookup_name(&name, node.span, &node.alias)?;
+                let name = self.fold_expr(*name)?;
 
-                        // construct an empty curry (this is a "fresh" call)
-                        FuncCurry {
-                            def_id: id,
-                            args: vec![],
-                            named_args: vec![],
-                        }
-                    }
+                let closure = name.try_cast(|n| n.into_closure(), None, "a function")?;
 
-                    // by using an inner curry
-                    ExprKind::FuncCurry(curry) => curry,
-
-                    kind => bail!(Error::new(Reason::Expected {
-                        who: None,
-                        expected: "a function".to_string(),
-                        found: format!("`{kind}`")
-                    })
-                    .with_span(name.span)),
-                };
-
-                self.fold_function(curry, args, named_args, node.span)?
+                self.fold_function(closure, args, named_args, node.span)?
             }
 
-            ExprKind::Pipeline(Pipeline { exprs: mut nodes }) => {
-                let value = nodes.remove(0);
-
-                let mut value = self.fold_expr(value)?;
-
-                if let ExprKind::FuncCurry(_) = &value.kind {
-                    // first value has evaluated to a function, which means we cannot
-                    // evaluate the pipeline at the moment -> just keep the pipeline as is
-                    nodes.insert(0, value);
-                    node.kind = ExprKind::Pipeline(Pipeline { exprs: nodes });
-                    node
-                } else {
-                    let mut work_stack = Vec::with_capacity(nodes.len());
-                    work_stack.extend(nodes.into_iter().rev());
-                    while let Some(node) = work_stack.pop() {
-                        //// dbg!(&node);
-
-                        let node = self.fold_expr(node)?;
-
-                        //// dbg!(&node);
-
-                        value = match node.kind {
-                            ExprKind::FuncCurry(func) => {
-                                self.fold_function(func, vec![value], HashMap::new(), node.span)?
-                            }
-                            ExprKind::Pipeline(Pipeline { exprs: nodes }) => {
-                                work_stack.extend(nodes.into_iter().rev());
-                                value
-                            }
-                            item => bail!(
-                                "cannot apply argument `{}` to non-function: `{item}`",
-                                value.kind
-                            ),
-                        };
-                    }
-                    value
+            ExprKind::Pipeline(Pipeline { mut exprs }) => {
+                let mut value = exprs.remove(0);
+                for expr in exprs {
+                    let span = expr.span;
+                    
+                    value = Expr::from(ExprKind::FuncCall(FuncCall {
+                        name: Box::new(expr),
+                        args: vec![value],
+                        named_args: HashMap::new(),
+                    }));
+                    value.span = span;
                 }
+                self.fold_expr(value)?
             }
 
-            ExprKind::FuncCurry(_) => {
-                // this can happen on occasional second resolve of same expression
-                // in such case: skip any resolving
-                node
+            ExprKind::Closure(closure) => {
+                self.fold_function(closure, vec![], HashMap::new(), node.span)?
             }
 
             item => {
@@ -160,11 +111,27 @@ impl AstFold for Resolver {
                 node
             }
         };
+        r.alias = alias;
 
         if r.ty.is_none() {
             r.ty = Some(resolve_type(&r)?)
         }
         Ok(r)
+    }
+}
+
+fn closure_of_func_def(func_def: &FuncDef) -> Closure {
+    Closure {
+        name: Some(func_def.name.clone()),
+        body: func_def.body.clone(),
+
+        args: vec![],
+        params: func_def.positional_params.clone(),
+
+        named_args: vec![],
+        named_params: func_def.named_params.clone(),
+
+        env: HashMap::default(),
     }
 }
 
@@ -190,34 +157,31 @@ impl Resolver {
 
     fn fold_function(
         &mut self,
-        curry: FuncCurry,
+        closure: Closure,
         args: Vec<Expr>,
         named_args: HashMap<String, Expr>,
         span: Option<Span>,
     ) -> Result<Expr, anyhow::Error> {
-        //dbg!(&curry);
+        let closure = self.apply_args_to_closure(closure, args, named_args)?;
+        let args_len = closure.args.len();
 
-        let id = Some(curry.def_id);
-        let func_def = self.context.declarations.get_func(id)?.clone();
+        let enough_args = closure.args.len() >= closure.params.len();
 
-        let curry = self.apply_args_to_curry(curry, args, named_args, &func_def)?;
-        let args_len = curry.args.len();
-
-        let enough_args = args_len >= func_def.positional_params.len();
+        // eprintln!("{:?}: got: {} expected: {}", &closure.name, closure.args.len(), closure.params.len());
 
         let mut r = if enough_args {
-            // eprintln!(
-            //     "resolving function {} with args: {:#?}",
-            //     func_def.name, curry.args
-            // );
+            // eprintln!("resolving function {:#?} with {:#?}", closure.name, closure.args);
 
-            // fold curry
-            let curry = self.resolve_function_args(curry, &func_def)?;
+            // dbg!(&closure);
 
-            // eprintln!("materializing function {}", func_def.name);
+            let closure = self.resolve_function_args(closure)?;
+
+            // dbg!(&closure);
+
+            // eprintln!("materializing function {:#?} with {:#?}", closure.name, closure.args);
 
             // evaluate
-            match super::transforms::cast_transform(self, curry)? {
+            match super::transforms::cast_transform(self, closure)? {
                 Ok((preceding_pipeline, transform)) => {
                     // this function call is a transform, append it to the pipeline
 
@@ -242,56 +206,57 @@ impl Resolver {
 
                     pipeline
                 }
-                Err(curry) => {
+                Err(closure) => {
                     // this function call is not a transform, proceed with materialization
 
-                    let param_namespace = format!("_param.{}", curry.def_id);
+                    // let name = closure.name.clone();
 
-                    // declare each of the params and add it to scope
-                    for (param, arg) in zip(func_def.named_params, curry.named_args) {
-                        let value = arg.unwrap_or_else(|| param.default_value.unwrap());
-                        let dec = Declaration::Expression(Box::new(value));
-                        let id = self.context.declarations.push(dec, None);
+                    let (func_env, body) = env_of_closure(closure);
 
-                        self.context.scope.add(&param_namespace, &param.name, id);
-                    }
-                    for (param, arg) in zip(func_def.positional_params, curry.args) {
-                        let value = arg.kind.clone().into();
-                        let dec = Declaration::Expression(Box::new(value));
-                        let id = self.context.declarations.push(dec, None);
-
-                        self.context.scope.add(&param_namespace, &param.name, id);
-                    }
-
-                    // dbg!(&self.context.scope);
-                    // dbg!(&func_def.body);
+                    self.context.scope.push_namespace(NS_PARAM);
+                    self.context.insert_decls(&NS_PARAM, func_env);
 
                     // fold again, to resolve inner variables & functions
-                    let body = self.fold_expr(*func_def.body)?;
-
-                    // dbg!(&body);
-
-                    // TODO: late binding of args may cause args of some functions not to be resolved at this point
-                    //  this means that when we drop this function's scope and param decls, they will never be resolved.
-                    //  test case: func take_oldest n -> (sort [-age] | take n)
+                    let body = self.fold_expr(body)?;
 
                     // remove param decls
-                    let dropped = self.context.scope.drop(&param_namespace);
-                    for id in dropped.values() {
-                        self.context.declarations.forget(*id);
-                    }
+                    let func_env = self.context.take_decls(NS_PARAM);
 
-                    body
+                    // println!("{name:?} {}", body);
+
+                    if let ExprKind::Closure(mut inner_closure) = body.kind {
+                        // body couldn't been resolved - construct a closure to be evaluated later
+
+                        inner_closure.env = func_env;
+
+                        let (got, missing) =
+                            inner_closure.params.split_at(inner_closure.args.len());
+                        let missing = missing.to_vec();
+                        inner_closure.params = got.to_vec();
+
+                        Expr::from(ExprKind::Closure(Closure {
+                            name: None,
+                            args: vec![],
+                            params: missing,
+                            named_args: vec![],
+                            named_params: vec![],
+                            body: Box::new(Expr::from(ExprKind::Closure(inner_closure))),
+                            env: HashMap::new(),
+                        }))
+                    } else {
+                        // resolved, return result
+                        body
+                    }
                 }
             }
         } else {
             // not enough arguments: construct a func closure
 
-            let mut node = Expr::from(ExprKind::FuncCurry(curry));
-
-            let mut ty = type_of_func_def(&func_def);
+            let mut ty = type_of_closure(&closure);
             ty.args = ty.args[args_len..].to_vec();
             ty.named.clear();
+
+            let mut node = Expr::from(ExprKind::Closure(closure));
             node.ty = Some(Ty::Function(ty));
 
             node
@@ -300,91 +265,99 @@ impl Resolver {
         Ok(r)
     }
 
-    fn apply_args_to_curry(
+    fn apply_args_to_closure(
         &mut self,
-        mut curry: FuncCurry,
+        mut closure: Closure,
         args: Vec<Expr>,
         named_args: HashMap<Ident, Expr>,
-        func_def: &FuncDef,
-    ) -> Result<FuncCurry> {
+    ) -> Result<Closure> {
         for arg in args {
-            curry.args.push(arg);
+            closure.args.push(arg);
         }
 
         // named arguments are consumed only by the first function (non-curry)
-        if !curry.named_args.is_empty() {
+        if !closure.named_args.is_empty() {
             if !named_args.is_empty() {
                 bail!("function curry cannot accept named arguments");
             }
         } else {
-            curry.named_args = func_def.named_params.iter().map(|_| None).collect();
+            closure.named_args = closure.named_params.iter().map(|_| None).collect();
             for (name, arg) in named_args {
-                let (index, _) = func_def
+                let (index, _) = closure
                     .named_params
                     .iter()
                     .find_position(|p| p.name == name)
                     .ok_or_else(|| anyhow::anyhow!("unknown named argument"))?;
 
-                curry.named_args[index] = Some(arg);
+                closure.named_args[index] = Some(arg);
             }
         }
 
-        Ok(curry)
+        Ok(closure)
     }
 
-    fn resolve_function_args(&mut self, curry: FuncCurry, func_def: &FuncDef) -> Result<FuncCurry> {
-        let mut result = FuncCurry {
-            def_id: curry.def_id,
-            args: Vec::with_capacity(curry.args.len()),
-            named_args: Vec::with_capacity(curry.named_args.len()),
+    fn resolve_function_args(&mut self, to_resolve: Closure) -> Result<Closure> {
+        let mut closure = Closure {
+            args: Vec::with_capacity(to_resolve.args.len()),
+            named_args: Vec::with_capacity(to_resolve.named_args.len()),
+            ..to_resolve
         };
 
         {
             // positional args
+            // use reverse order because frame must be resolved first so it can be added to scope
             let mut frame_in_scope = false;
-            for (index, arg) in curry.args.into_iter().enumerate().rev() {
-                let param = &func_def.positional_params[index];
+            for (index, arg) in to_resolve.args.into_iter().enumerate().rev() {
+                let param = &closure.params[index];
 
-                let arg = self.resolve_function_arg(arg, param, &func_def.name)?;
+                let arg = self.resolve_function_arg(arg, param, closure.name.as_deref())?;
 
+                // add table's frame into scope
                 if !frame_in_scope {
-                    // eprintln!("arg: {:#?}", arg);
-
                     if let Some(Ty::Table(frame)) = &arg.ty {
-                        // eprintln!("add frame to scope: {frame}");
                         self.context.scope.add_frame_columns(frame);
                         frame_in_scope = true;
                     }
                 }
+                // add aliased columns into scope
+                // TODO: select [a = 5, c = a + b]
+                // for expr in arg.as_vec() {
+                //     if let Some(alias) = &expr.alias {
+                //         self.context.scope.add(NS_FRAME, alias, expr.declared_at.unwrap());
+                //     }
+                // }
 
-                // push front (because of reverse resolve)
-                result.args.insert(0, arg);
+                // push front (because of reverse resolve order)
+                closure.args.insert(0, arg);
             }
-            self.context.scope.drop(NS_FRAME);
+
+            if frame_in_scope {
+                self.context.scope.drop(NS_FRAME);
+            }
         }
 
         {
             // named args
-            for (index, arg) in curry.named_args.into_iter().enumerate() {
+            for (index, arg) in to_resolve.named_args.into_iter().enumerate() {
                 if let Some(arg) = arg {
-                    let param = &func_def.named_params[index];
+                    let param = &closure.named_params[index];
 
-                    let arg = self.resolve_function_arg(arg, param, &func_def.name)?;
-                    result.named_args.push(Some(arg));
+                    let arg = self.resolve_function_arg(arg, param, closure.name.as_deref())?;
+                    closure.named_args.push(Some(arg));
                 } else {
-                    result.named_args.push(None);
+                    closure.named_args.push(None);
                 }
             }
         }
 
-        Ok(result)
+        Ok(closure)
     }
 
     fn resolve_function_arg(
         &mut self,
         arg: Expr,
         param: &FuncParam,
-        func_name: &str,
+        func_name: Option<&str>,
     ) -> Result<Expr> {
         let prev_namespace = self.namespace;
 
@@ -402,7 +375,7 @@ impl Resolver {
 
         // validate type
         let param_ty = param.ty.as_ref().unwrap_or(&Ty::Infer);
-        let assumed_ty = validate_type(&arg, param_ty, || Some(func_name.to_string()))?;
+        let assumed_ty = validate_type(&arg, param_ty, || func_name.map(|n| n.to_string()))?;
         arg.ty = Some(assumed_ty);
 
         self.namespace = prev_namespace;
@@ -437,11 +410,11 @@ impl Resolver {
                         ExprKind::ResolvedPipeline(transforms) => {
                             main_pipeline = transforms;
                         }
-                        kind => {
+                        _ => {
                             bail!(Error::new(Reason::Expected {
                                 who: None,
                                 expected: "pipeline that resolves to a table".to_string(),
-                                found: format!("`{kind}`")
+                                found: format!("`{expr}`")
                             })
                             .with_help("are you missing `from` statement?")
                             .with_span(stmt.span))
@@ -456,4 +429,17 @@ impl Resolver {
             tables,
         })
     }
+}
+
+fn env_of_closure(closure: Closure) -> (HashMap<String, Declaration>, Expr) {
+    let mut func_env = HashMap::new();
+
+    for (param, arg) in zip(closure.named_params, closure.named_args) {
+        let value = arg.unwrap_or_else(|| param.default_value.unwrap());
+        func_env.insert(param.name.clone(), Declaration::Expression(Box::new(value)));
+    }
+    for (param, arg) in zip(&closure.params, closure.args) {
+        func_env.insert(param.name.clone(), Declaration::Expression(Box::new(arg)));
+    }
+    (func_env, *closure.body)
 }
