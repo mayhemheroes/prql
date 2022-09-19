@@ -225,27 +225,21 @@ impl Expr {
         node
     }
 
-    /// Often we don't care whether a List or single item is passed; e.g.
-    /// `select x` vs `select [x, y]`. This equalizes them both to a vec of
-    /// [Node]-s.
-    pub fn coerce_to_vec(self) -> Vec<Expr> {
+    pub fn coerce_into_vec(self) -> Vec<Expr> {
         match self.kind {
             ExprKind::List(items) => items,
             _ => vec![self],
         }
     }
 
-    pub fn as_vec(&self) -> Vec<&Expr> {
-        match &self.kind {
-            ExprKind::List(items) => items.iter().collect(),
-            _ => vec![self],
-        }
-    }
-
-    pub fn coerce_to_pipeline(self) -> Pipeline {
-        match self.kind {
-            ExprKind::Pipeline(p) => p,
-            _ => Pipeline { exprs: vec![self] },
+    pub fn coerce_as_mut_vec(&mut self) -> Vec<&mut Expr> {
+        if matches!(self.kind, ExprKind::List(_)) {
+            match &mut self.kind {
+                ExprKind::List(items) => items.iter_mut().collect(),
+                _ => unreachable!(),
+            }
+        } else {
+            vec![self]
         }
     }
 
@@ -299,7 +293,6 @@ impl From<ExprKind> for anyhow::Error {
 
 impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        
         if let Some(alias) = &self.alias {
             display_ident(f, alias)?;
             f.write_str(" = ")?;

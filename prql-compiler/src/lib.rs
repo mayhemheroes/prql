@@ -598,9 +598,8 @@ select `first name`
         "###;
         assert_display_snapshot!((compile(query)?), @r###"
         SELECT
-          5 AS x,
           6 AS y,
-          5 + 6 + a as z
+          5 + 6 + a AS z
         FROM
           numbers
         "###);
@@ -637,6 +636,8 @@ select `first name`
             'two households"',
             ' c'
           ) AS v
+        FROM
+          empty_table_to_do
         "###);
 
         Ok(())

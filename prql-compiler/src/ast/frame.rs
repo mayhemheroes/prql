@@ -53,7 +53,7 @@ impl Frame {
         for expr in assigns {
             let id = expr.declared_at.unwrap();
             let name = expr.alias.clone().or_else(|| expr.kind.as_ident().cloned());
-            
+
             self.push_column(name, id);
         }
     }

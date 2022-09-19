@@ -29,6 +29,9 @@ pub struct Resolver {
     pub context: Context,
 
     namespace: Namespace,
+
+    /// Sometimes ident closures must be resolved and sometimes not. See [test::test_func_call_resolve].
+    in_func_call_name: bool,
 }
 
 impl Resolver {
@@ -36,6 +39,7 @@ impl Resolver {
         Resolver {
             context,
             namespace: Namespace::FunctionsColumns,
+            in_func_call_name: false,
         }
     }
 }
@@ -60,7 +64,12 @@ impl AstFold for Resolver {
                     // convert ident to function without args
                     Declaration::Function(func_def) => {
                         let closure = closure_of_func_def(func_def);
-                        self.fold_function(closure, vec![], HashMap::new(), node.span)?
+
+                        if self.in_func_call_name {
+                            Expr::from(ExprKind::Closure(closure))
+                        } else {
+                            self.fold_function(closure, vec![], HashMap::new(), node.span)?
+                        }
                     }
 
                     // init type for tables
@@ -80,10 +89,15 @@ impl AstFold for Resolver {
                 args,
                 named_args,
             }) => {
+                // fold name (or closure)
+                let old = self.in_func_call_name;
+                self.in_func_call_name = true;
                 let name = self.fold_expr(*name)?;
+                self.in_func_call_name = old;
 
                 let closure = name.try_cast(|n| n.into_closure(), None, "a function")?;
 
+                // fold function
                 self.fold_function(closure, args, named_args, node.span)?
             }
 
@@ -91,7 +105,7 @@ impl AstFold for Resolver {
                 let mut value = exprs.remove(0);
                 for expr in exprs {
                     let span = expr.span;
-                    
+
                     value = Expr::from(ExprKind::FuncCall(FuncCall {
                         name: Box::new(expr),
                         args: vec![value],
@@ -214,7 +228,7 @@ impl Resolver {
                     let (func_env, body) = env_of_closure(closure);
 
                     self.context.scope.push_namespace(NS_PARAM);
-                    self.context.insert_decls(&NS_PARAM, func_env);
+                    self.context.insert_decls(NS_PARAM, func_env);
 
                     // fold again, to resolve inner variables & functions
                     let body = self.fold_expr(body)?;
@@ -303,6 +317,8 @@ impl Resolver {
             ..to_resolve
         };
 
+        let func_name = closure.name.as_deref();
+
         {
             // positional args
             // use reverse order because frame must be resolved first so it can be added to scope
@@ -310,7 +326,31 @@ impl Resolver {
             for (index, arg) in to_resolve.args.into_iter().enumerate().rev() {
                 let param = &closure.params[index];
 
-                let arg = self.resolve_function_arg(arg, param, closure.name.as_deref())?;
+                let arg = match arg.kind {
+                    // if this is a list, fold one by one
+                    ExprKind::List(items) => {
+                        let mut res = Vec::with_capacity(items.len());
+                        for item in items {
+                            let mut item = self.resolve_function_arg(item, param, func_name)?;
+
+                            // add aliased columns into scope
+                            if let Some(alias) = item.alias.clone() {
+                                self.context.declare_as_ident(&mut item);
+
+                                let id = item.declared_at.unwrap();
+                                self.context.scope.add(NS_FRAME, alias, id);
+                            }
+                            res.push(item);
+                        }
+                        Expr {
+                            kind: ExprKind::List(res),
+                            ..arg
+                        }
+                    }
+
+                    // just fold the argument alone
+                    _ => self.resolve_function_arg(arg, param, func_name)?,
+                };
 
                 // add table's frame into scope
                 if !frame_in_scope {
@@ -319,13 +359,6 @@ impl Resolver {
                         frame_in_scope = true;
                     }
                 }
-                // add aliased columns into scope
-                // TODO: select [a = 5, c = a + b]
-                // for expr in arg.as_vec() {
-                //     if let Some(alias) = &expr.alias {
-                //         self.context.scope.add(NS_FRAME, alias, expr.declared_at.unwrap());
-                //     }
-                // }
 
                 // push front (because of reverse resolve order)
                 closure.args.insert(0, arg);
@@ -342,7 +375,7 @@ impl Resolver {
                 if let Some(arg) = arg {
                     let param = &closure.named_params[index];
 
-                    let arg = self.resolve_function_arg(arg, param, closure.name.as_deref())?;
+                    let arg = self.resolve_function_arg(arg, param, func_name)?;
                     closure.named_args.push(Some(arg));
                 } else {
                     closure.named_args.push(None);
@@ -359,18 +392,30 @@ impl Resolver {
         param: &FuncParam,
         func_name: Option<&str>,
     ) -> Result<Expr> {
-        let prev_namespace = self.namespace;
+        let mut arg = match arg.kind {
+            // if this is a list, fold one by one
+            ExprKind::List(items) => {
+                let mut res = Vec::with_capacity(items.len());
+                for item in items {
+                    let mut item = self.fold_within_namespace(item, &param.ty)?;
 
-        let mut arg = match param.ty.as_ref() {
-            Some(Ty::BuiltinKeyword) => arg,
-            Some(Ty::Table(_)) => {
-                self.namespace = Namespace::Tables;
-                self.fold_expr(arg)?
+                    // add aliased columns into scope
+                    if let Some(alias) = item.alias.clone() {
+                        self.context.declare_as_ident(&mut item);
+
+                        let id = item.declared_at.unwrap();
+                        self.context.scope.add(NS_FRAME, alias, id);
+                    }
+                    res.push(item);
+                }
+                Expr {
+                    kind: ExprKind::List(res),
+                    ..arg
+                }
             }
-            _ => {
-                self.namespace = Namespace::FunctionsColumns;
-                self.fold_expr(arg)?
-            }
+
+            // just fold the argument alone
+            _ => self.fold_within_namespace(arg, &param.ty)?,
         };
 
         // validate type
@@ -378,8 +423,24 @@ impl Resolver {
         let assumed_ty = validate_type(&arg, param_ty, || func_name.map(|n| n.to_string()))?;
         arg.ty = Some(assumed_ty);
 
-        self.namespace = prev_namespace;
         Ok(arg)
+    }
+
+    fn fold_within_namespace(&mut self, expr: Expr, ty: &Option<Ty>) -> Result<Expr> {
+        let prev_namespace = self.namespace;
+        let res = match ty.as_ref() {
+            Some(Ty::BuiltinKeyword) => Ok(expr),
+            Some(Ty::Table(_)) => {
+                self.namespace = Namespace::Tables;
+                self.fold_expr(expr)
+            }
+            _ => {
+                self.namespace = Namespace::FunctionsColumns;
+                self.fold_expr(expr)
+            }
+        };
+        self.namespace = prev_namespace;
+        res
     }
 
     /// fold statements and extract results into a [Query]
@@ -442,4 +503,30 @@ fn env_of_closure(closure: Closure) -> (HashMap<String, Declaration>, Expr) {
         func_env.insert(param.name.clone(), Declaration::Expression(Box::new(arg)));
     }
     (func_env, *closure.body)
+}
+
+#[cfg(test)]
+mod test {
+    use insta::assert_display_snapshot;
+
+    use crate::compile;
+
+    #[test]
+    fn test_func_call_resolve() {
+        assert_display_snapshot!(compile(r#"
+        from employees
+        aggregate [
+          count non_null:salary,
+          count,
+        ]
+        "#).unwrap(),
+            @r###"
+        SELECT
+          COUNT(salary),
+          COUNT(*)
+        FROM
+          employees
+        "###
+        );
+    }
 }

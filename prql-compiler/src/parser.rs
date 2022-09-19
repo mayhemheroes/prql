@@ -51,7 +51,10 @@ fn stmt_of_parse_pair(pair: Pair<Rule>) -> Result<Stmt> {
     let kind = match rule {
         Rule::pipeline_stmt => {
             let pipeline = expr_of_parse_pair(pair.into_inner().next().unwrap())?;
-            let exprs = pipeline.coerce_to_pipeline().exprs;
+            let exprs = match pipeline.kind {
+                ExprKind::Pipeline(pipeline) => pipeline.exprs,
+                _ => vec![pipeline],
+            };
             StmtKind::Pipeline(exprs)
         }
         Rule::query_def => {
@@ -337,7 +340,6 @@ fn expr_of_parse_pair(pair: Pair<Rule>) -> Result<Expr> {
                     let typ = match TyLit::from_str(name) {
                         Ok(t) => Ty::from(t),
                         Err(_) if name == "builtin_keyword" => Ty::BuiltinKeyword,
-                        Err(_) if name == "assigns" => Ty::Assigns,
                         Err(_) if name == "table" => Ty::Table(Frame::default()),
                         Err(_) => {
                             eprintln!("named type: {}", name);

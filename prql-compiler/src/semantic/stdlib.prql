@@ -3,10 +3,10 @@
 # make sure to update cast_transfrom if you change any of the declarations here
 
 func from<table> source<table> -> ()
-func select<table> a<assigns<column>> tbl -> ()
+func select<table> a<column> tbl -> ()
 func filter<table> condition<bool> tbl -> ()
-func derive<table> a<assigns<column>> tbl -> ()
-func aggregate<table> a<assigns<column>> tbl -> ()
+func derive<table> a<column> tbl -> ()
+func aggregate<table> a<column> tbl -> ()
 func sort<table> by tbl -> ()
 func take<table> expr tbl -> ()
 func join<table> with<table> filter side<builtin_keyword>:inner tbl -> ()

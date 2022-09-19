@@ -102,8 +102,9 @@ impl Cli {
 
                 [
                     format!("{:?}", context.declarations).into_bytes(),
-                    serde_yaml::to_string(&ir)?.into_bytes()
-                ].concat()
+                    serde_yaml::to_string(&ir)?.into_bytes(),
+                ]
+                .concat()
             }
             Cli::Compile(_) => crate::compile(source)?.as_bytes().to_vec(),
         })
@@ -194,8 +195,8 @@ sort full
         select [f = first_name, l = last_name, gender]  # [f, l, gender]
         derive full_name = f + " " + l                  # [f, l, gender, full_name]
         take 23                                         # [f, l, gender, full_name]
-        select [l + " " + f, full = full_name, gender]  # [?, full_name, gender]
-        sort full                                       # [?, full_name, gender]
+        select [l + " " + f, full = full_name, gender]  # [?, full, gender]
+        sort full                                       # [?, full, gender]
         "###);
     }
 

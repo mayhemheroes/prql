@@ -115,46 +115,27 @@ impl Context {
         r
     }
 
-    /// Move top-level expressions into declarations and replace them with idents
-    pub(super) fn declare_as_idents(&mut self, nodes: Vec<Expr>) -> Result<Vec<Expr>> {
-        let mut res = Vec::with_capacity(nodes.len());
-        for node in nodes {
-            let alias = node.alias.clone();
-
-            let expr = self.declare_as_ident(node)?;
-
-            res.push(if let Some(alias) = alias {
-                // introduce a new expression alias
-                let mut ident = Expr::from(ExprKind::Ident(alias));
-                ident.declared_at = Some(expr.declared_at.unwrap());
-                ident
-            } else {
-                expr
-            });
+    /// Ensure that expressions are declared.
+    /// If expr is aliased, replace it with an ident.
+    pub(super) fn declare_as_idents(&mut self, exprs: &mut [Expr]) {
+        for expr in exprs {
+            self.declare_as_ident(expr);
         }
-        Ok(res)
     }
 
-    fn declare_as_ident(&mut self, expr: Expr) -> Result<Expr> {
-        Ok(match expr.kind {
-            // keep existing ident
-            ExprKind::Ident(_) => expr,
+    /// Ensure that expression are declared.
+    /// If expr is aliased, replace it with an ident.
+    pub(super) fn declare_as_ident(&mut self, expr: &mut Expr) {
+        // ensure that expr id declared
+        expr.declared_at = expr.declared_at.or_else(|| {
+            Some(self.declare(Declaration::Expression(Box::from(expr.clone())), expr.span))
+        });
 
-            // declare new expression so it can be references from FrameColumn
-            _ => {
-                let span = expr.span;
-                let id = self.declare(Declaration::Expression(Box::from(expr.clone())), span);
-
-                Expr {
-                    kind: ExprKind::Literal(Literal::Null),
-                    span,
-                    declared_at: Some(id),
-                    ty: None,
-                    is_complex: false,
-                    alias: None,
-                }
-            }
-        })
+        // replace expr with its alias
+        if let Some(alias) = &expr.alias {
+            expr.kind = ExprKind::Ident(alias.to_string());
+            expr.alias = None;
+        }
     }
 
     pub fn get_column_names(&self, frame: &Frame) -> Vec<Option<String>> {

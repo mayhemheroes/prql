@@ -241,9 +241,8 @@ pub fn cast_transform(
         "select" => {
             let ([assigns, pipeline], []) = unpack::<2, 0>(closure)?;
 
-            let assigns = resolver
-                .context
-                .declare_as_idents(assigns.coerce_to_vec())?;
+            let mut assigns = assigns.coerce_into_vec();
+            resolver.context.declare_as_idents(&mut assigns);
 
             (Some(pipeline), TransformKind::Select(assigns))
         }
@@ -255,18 +254,16 @@ pub fn cast_transform(
         "derive" => {
             let ([assigns, pipeline], []) = unpack::<2, 0>(closure)?;
 
-            let assigns = resolver
-                .context
-                .declare_as_idents(assigns.coerce_to_vec())?;
+            let mut assigns = assigns.coerce_into_vec();
+            resolver.context.declare_as_idents(&mut assigns);
 
             (Some(pipeline), TransformKind::Derive(assigns))
         }
         "aggregate" => {
             let ([assigns, pipeline], []) = unpack::<2, 0>(closure)?;
 
-            let assigns = resolver
-                .context
-                .declare_as_idents(assigns.coerce_to_vec())?;
+            let mut assigns = assigns.coerce_into_vec();
+            resolver.context.declare_as_idents(&mut assigns);
             let by = vec![];
 
             (Some(pipeline), TransformKind::Aggregate { assigns, by })
@@ -275,40 +272,21 @@ pub fn cast_transform(
             let ([by, pipeline], []) = unpack::<2, 0>(closure)?;
 
             let by = by
-                .coerce_to_vec()
+                .coerce_into_vec()
                 .into_iter()
                 .map(|node| {
-                    let (column, direction) = match &node.kind {
-                        ExprKind::Ident(_) => (node.clone(), SortDirection::default()),
-                        ExprKind::Unary { op, expr: a }
-                            if matches!((op, &a.kind), (UnOp::Neg, ExprKind::Ident(_))) =>
-                        {
-                            (*a.clone(), SortDirection::Desc)
+                    let (mut column, direction) = match node.kind {
+                        ExprKind::Unary { op, expr } if matches!(op, UnOp::Neg) => {
+                            (*expr, SortDirection::Desc)
                         }
-                        _ => {
-                            return Err(Error::new(Reason::Expected {
-                                who: Some("`sort`".to_string()),
-                                expected: "column name, optionally prefixed with + or -"
-                                    .to_string(),
-                                found: node.to_string(),
-                            })
-                            .with_span(node.span));
-                        }
+                        _ => (node, SortDirection::default()),
                     };
 
-                    if matches!(column.kind, ExprKind::Ident(_)) {
-                        Ok(ColumnSort { direction, column })
-                    } else {
-                        Err(Error::new(Reason::Expected {
-                            who: Some("`sort`".to_string()),
-                            expected: "column name".to_string(),
-                            found: format!("`{column}`"),
-                        })
-                        .with_help("you can introduce a new column with `derive`")
-                        .with_span(column.span))
-                    }
+                    resolver.context.declare_as_ident(&mut column);
+
+                    ColumnSort { direction, column }
                 })
-                .try_collect()?;
+                .collect();
 
             (Some(pipeline), TransformKind::Sort(by))
         }
@@ -354,7 +332,7 @@ pub fn cast_transform(
 
             let with = unpack_table_ref(with)?;
 
-            let filter = filter.coerce_to_vec();
+            let filter = filter.coerce_into_vec();
             let use_using =
                 (filter.iter().map(|x| &x.kind)).all(|x| matches!(x, ExprKind::Ident(_)));
 
@@ -370,7 +348,7 @@ pub fn cast_transform(
             let ([by, pipeline, pl], []) = unpack::<3, 0>(closure)?;
 
             let by = by
-                .coerce_to_vec()
+                .coerce_into_vec()
                 .into_iter()
                 // check that they are only idents
                 .map(|n| match n.kind {
@@ -574,14 +552,13 @@ mod tests {
               Select:
                 - Ident: invoice_no
                   ty:
-                    Parameterized:
-                      - Assigns
-                      - Type:
-                          Literal: Column
+                    Literal: Column
             is_complex: false
             ty:
               columns:
-                - Unnamed: 30
+                - Named:
+                    - invoice_no
+                    - 30
               sort: []
               tables: []
             span:
@@ -605,14 +582,18 @@ mod tests {
                     is_complex: false
                     ty:
                       columns:
-                        - Unnamed: 30
+                        - Named:
+                            - invoice_no
+                            - 30
                       sort: []
                       tables: []
                     span: ~
             is_complex: false
             ty:
               columns:
-                - Unnamed: 30
+                - Named:
+                    - invoice_no
+                    - 30
               sort: []
               tables: []
             span:
@@ -689,7 +670,14 @@ mod tests {
                   - kind:
                       Aggregate:
                         assigns:
-                          - Ident: "<unnamed>"
+                          - SString:
+                              - String: AVG(
+                              - Expr:
+                                  Ident: amount
+                                  ty: Infer
+                              - String: )
+                            ty:
+                              Literal: Column
                         by: []
                     is_complex: false
                     ty:
@@ -810,7 +798,7 @@ mod tests {
                 - All: 29
               sort:
                 - direction: Desc
-                  column: 33
+                  column: 34
               tables: []
             span:
               start: 106
@@ -827,7 +815,7 @@ mod tests {
                 - All: 29
               sort:
                 - direction: Asc
-                  column: 33
+                  column: 35
               tables: []
             span:
               start: 132
@@ -844,7 +832,7 @@ mod tests {
                 - All: 29
               sort:
                 - direction: Desc
-                  column: 33
+                  column: 36
               tables: []
             span:
               start: 157
