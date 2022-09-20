@@ -18,6 +18,7 @@ group [title, country] (
 )
 filter sum_gross_cost &gt; 100000
 derive id = f&#34;{title}_{country}&#34;
+derive country_code = s&#34;LEFT(country, 2)&#34;
 sort [sum_gross_cost, -country]
 take 1..20
 </code>
