@@ -13,7 +13,7 @@ jobs:
     name: 'build mayhem fuzzing container'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Log in to the Container registry
         uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
@@ -51,11 +51,10 @@ jobs:
           - mayhem/parse.mayhemfile
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Start analysis for ${{ matrix.mayhemfile }}
-        uses: ForAllSecure/mcode-action@v1
+        uses: ForAllSecure/mcode-action@long-runs
         with:
           mayhem-token: ${{ secrets.MAYHEM_TOKEN }}
           args: --image ${{ needs.build.outputs.image }} --file ${{ matrix.mayhemfile }} --duration 300
-          sarif-output: sarif
